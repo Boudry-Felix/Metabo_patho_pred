@@ -1,0 +1,14 @@
+#%% Vendor=jeol; Type=fid; LB=0.3; GB=0; ZF=2; PHC1=FALSE; CRIT1=; TSP=TRUE
+
+#
+# Baseline Correction: PPM Range = (  -0.5  ,  10  )
+#
+airpls -0.5 10 -5 2 
+
+#
+# Zeroing the selected zones ...
+#
+zero
+4.7302 4.886
+EOL
+

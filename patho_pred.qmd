@@ -1,0 +1,122 @@
+---
+title: "Pathology prediction in rowers"
+author: "Félix BOUDRY"
+format: 
+    html:
+      toc: true
+      toc_depth: 3
+      code-links:
+         - text: Github
+           href: https://github.com/fboudry/patho_pred.git
+           icon: github
+      other-links:
+        - text: Lab
+          href: https://espace-dev.fr
+        - text: email
+          href: mailto:felix.boudry@univ-perp.fr
+      code-fold: show
+      code-summary: "Show code"
+      code-tools: 
+          source: true
+          toggle: true
+---
+
+## Context
+
+We aim at detecting pathological athletes during an altitude training camp. To do so we used urine sample analysed by NMR. Here we try different model to detect the pathological samples to determine which one is the best.
+
+```{r Config, include=FALSE}
+set.seed(42)
+library(tidyverse)
+library(data.table)
+library(knitr)
+library(caret)
+library(factoextra)
+library(cluster)
+library(ggfortify)
+source("functions.R")
+```
+
+# Pre-post comparison
+
+Pre-processing was done using [npflow](https://nmrprocflow.org), the macro file is available [here](./npflow/NP_macro_cmd_Patho_pre_day.txt).
+We compare data from the first day with data from the day symptoms were observed. Do not forget that the subjects are training in altitude and an effect of chronic hypoxic exposure can be observed.
+
+```{r Read_PP}
+data_pre_post <- fread(input = "Data/data_Patho_pre_day.csv") |> 
+  column_to_rownames(var = "Samplecode") |> 
+  as.data.frame()
+```
+
+```{r KM_PP}
+km_res <- kmeans(x = data_pre_post, centers = 2)
+km_cluster <- km_res$cluster - 1
+confusionMatrix(km_cluster |> as.factor(), data_pre_post$Patho |> as.factor()) |> draw_confusion_matrix()
+fviz_cluster(object = km_res, data = data_pre_post)
+```
+
+```{r HC_PP}
+hc_res <- agnes(data_pre_post, method = "ward")
+hclust_plot(clust_data = hc_res, target = data_pre_post$Patho)
+```
+
+```{r PCA_PP}
+pca_res <- prcomp(x = data_pre_post)
+autoplot(
+  object = pca_res,
+  data = data_pre_post,
+  color = "Patho",
+  loadings = TRUE,
+  loadings.label = TRUE,
+  loadings.label.size = 3
+)
+```
+
+```{r PLS-DA_PP}
+pla_res <- ropls::opls(data_pre_post, data_pre_post$Patho)
+```
+
+# Random comparison
+
+Pre-processing was done using [npflow](https://nmrprocflow.org), the macro file is available [here](./npflow/NP_macro_cmd_Patho_rand.txt).
+We compare data from pathological subjects with data from non pathological ones on the same day to avoid differences induced by the hypoxic exposure.
+
+```{r Read_R}
+data_rand <- fread(input = "Data/data_Patho_rand.csv") |> 
+  column_to_rownames(var = "Samplecode") |> 
+  as.data.frame()
+```
+
+```{r KM_R}
+km_res <- kmeans(x = data_rand, centers = 2)
+km_cluster <- km_res$cluster - 1
+confusionMatrix(km_cluster |> as.factor(), data_rand$Patho |> as.factor()) |> draw_confusion_matrix()
+fviz_cluster(object = km_res, data = data_rand)
+```
+
+```{r HC_R}
+hc_res <- agnes(data_rand, method = "ward")
+hclust_plot(clust_data = hc_res, target = data_rand$Patho)
+```
+
+```{r PCA_R}
+pca_res <- prcomp(x = data_rand)
+autoplot(
+  object = pca_res,
+  data = data_rand,
+  color = "Patho",
+  loadings = TRUE,
+  loadings.label = TRUE,
+  loadings.label.size = 3
+)
+```
+
+```{r PLS-DA_R}
+pls_res <- ropls::opls(data_rand, data_rand$Patho)
+```
+
+# Full dataset detection
+
+We try to identify pathological data among the full data set.
+
+# Metabolites of interest evolution
