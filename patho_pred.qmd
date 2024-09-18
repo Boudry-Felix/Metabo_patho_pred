@@ -30,23 +30,55 @@ set.seed(42)
 library(tidyverse)
 library(data.table)
 library(knitr)
+library(janitor)
+library(psych)
+library(kableExtra)
 library(caret)
 library(factoextra)
 library(cluster)
 library(ggfortify)
+library(magrittr)
 source("functions.R")
+```
+
+# Data description
+
+```{r}
+antrop_data <- fread(input = "Data/Subjects.csv") |>
+  clean_names() |>
+  select(c("age", "height", "weight"))
+describe(x = antrop_data, na.rm = T) |>
+  round() |> 
+  select(c("mean", "sd", "median", "min", "max")) |> 
+  kable(caption = paste0(
+      "<center><strong>Anthropological values (n = ",
+      nrow(antrop_data),
+      ")</center></strong>"
+    )) 
+  # kable_styling(bootstrap_options = c("striped"), full_width = FALSE)
+```
+
+# Pre-processing
+
+Pre-processing was done using [npflow](https://nmrprocflow.org).
+
+```{r}
+data_pre_post <- fread(input = "Data/data_Patho_pre_day.csv") |> 
+  column_to_rownames(var = "Samplecode") |> 
+  mutate_at(c(2:237), \(x) scale(x)) |> 
+  lapply(as.numeric) |> 
+  as.data.frame()
+
+data_rand <- fread(input = "Data/data_Patho_rand.csv") |> 
+  column_to_rownames(var = "Samplecode") |> 
+  mutate_at(c(2:380), \(x) scale(x)) |>
+  lapply(as.numeric) |> 
+  as.data.frame()
 ```
 
 # Pre-post comparison
 
-Pre-processing was done using [npflow](https://nmrprocflow.org), the macro file is available [here](./npflow/NP_macro_cmd_Patho_pre_day.txt).
 We compare data from the first day with data from the day symptoms were observed. Do not forget that the subjects are training in altitude and an effect of chronic hypoxic exposure can be observed.
-
-```{r Read_PP}
-data_pre_post <- fread(input = "Data/data_Patho_pre_day.csv") |> 
-  column_to_rownames(var = "Samplecode") |> 
-  as.data.frame()
-```
 
 ```{r KM_PP}
 km_res <- kmeans(x = data_pre_post, centers = 2)
@@ -57,35 +89,34 @@ fviz_cluster(object = km_res, data = data_pre_post)
 
 ```{r HC_PP}
 hc_res <- agnes(data_pre_post, method = "ward")
+confusionMatrix(hc_res |> cutree(k = 2) |> subtract(e1 = 1) |> as.factor(), data_pre_post$Patho |> as.factor()) |> draw_confusion_matrix()
 hclust_plot(clust_data = hc_res, target = data_pre_post$Patho)
 ```
 
 ```{r PCA_PP}
 pca_res <- prcomp(x = data_pre_post)
+pca_scores <- data.frame(pca_res$x[, 1:2])
+# confusionMatrix(pca_scores |> kmeans(centers = 2) %$% cluster - 1 |> as.factor(), data_pre_post$Patho |> as.factor()) |> draw_confusion_matrix()
 autoplot(
   object = pca_res,
   data = data_pre_post,
   color = "Patho",
   loadings = TRUE,
   loadings.label = TRUE,
-  loadings.label.size = 3
+  loadings.label.size = 3,
+  frame = TRUE,
+  frame.type = 'norm'
 )
 ```
 
 ```{r PLS-DA_PP}
-pla_res <- ropls::opls(data_pre_post, data_pre_post$Patho)
+pls_res <- ropls::opls(data_pre_post, data_pre_post$Patho)
+# confusionMatrix(pls_res |> as.factor(), data_pre_post$Patho |> as.factor()) |> draw_confusion_matrix()
 ```
 
 # Random comparison
 
-Pre-processing was done using [npflow](https://nmrprocflow.org), the macro file is available [here](./npflow/NP_macro_cmd_Patho_rand.txt).
 We compare data from pathological subjects with data from non pathological ones on the same day to avoid differences induced by the hypoxic exposure.
-
-```{r Read_R}
-data_rand <- fread(input = "Data/data_Patho_rand.csv") |> 
-  column_to_rownames(var = "Samplecode") |> 
-  as.data.frame()
-```
 
 ```{r KM_R}
 km_res <- kmeans(x = data_rand, centers = 2)
@@ -96,11 +127,13 @@ fviz_cluster(object = km_res, data = data_rand)
 
 ```{r HC_R}
 hc_res <- agnes(data_rand, method = "ward")
+confusionMatrix(hc_res |> cutree(k = 2) |> subtract(e1 = 1) |> as.factor(), data_rand$Patho |> as.factor()) |> draw_confusion_matrix()
 hclust_plot(clust_data = hc_res, target = data_rand$Patho)
 ```
 
 ```{r PCA_R}
 pca_res <- prcomp(x = data_rand)
+# confusionMatrix(pca_res |> as.factor(), data_rand$Patho |> as.factor()) |> draw_confusion_matrix()
 autoplot(
   object = pca_res,
   data = data_rand,
@@ -113,6 +146,7 @@ autoplot(
 
 ```{r PLS-DA_R}
 pls_res <- ropls::opls(data_rand, data_rand$Patho)
+# confusionMatrix(pls_res |> as.factor(), data_rand$Patho |> as.factor()) |> draw_confusion_matrix()
 ```
 
 # Full dataset detection
