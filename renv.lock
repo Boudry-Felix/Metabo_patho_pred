@@ -3095,6 +3095,22 @@
       ],
       "Hash": "c03fa420630029418f7e6da3667aac4a"
     },
+    "vip": {
+      "Package": "vip",
+      "Version": "0.4.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "foreach",
+        "ggplot2",
+        "stats",
+        "tibble",
+        "utils",
+        "yardstick"
+      ],
+      "Hash": "4bfee1f7181f71d552a4b63485f8fc25"
+    },
     "viridis": {
       "Package": "viridis",
       "Version": "0.6.5",
@@ -3188,6 +3204,27 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "51dab85c6c98e50a18d7551e9d49f76c"
+    },
+    "yardstick": {
+      "Package": "yardstick",
+      "Version": "1.3.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "cli",
+        "dplyr",
+        "generics",
+        "hardhat",
+        "lifecycle",
+        "rlang",
+        "tibble",
+        "tidyselect",
+        "utils",
+        "vctrs",
+        "withr"
+      ],
+      "Hash": "9ce4117141b326c4fffc7c42e56e0f88"
     },
     "zlibbioc": {
       "Package": "zlibbioc",

@@ -34,6 +34,8 @@ library(janitor)
 library(psych)
 library(kableExtra)
 library(caret)
+library(pls)
+library(vip)
 library(factoextra)
 library(cluster)
 library(ggfortify)
@@ -48,14 +50,12 @@ antrop_data <- fread(input = "Data/Subjects.csv") |>
   clean_names() |>
   select(c("age", "height", "weight"))
 describe(x = antrop_data, na.rm = T) |>
-  round() |> 
-  select(c("mean", "sd", "median", "min", "max")) |> 
-  kable(caption = paste0(
-      "<center><strong>Anthropological values (n = ",
-      nrow(antrop_data),
-      ")</center></strong>"
-    )) 
-  # kable_styling(bootstrap_options = c("striped"), full_width = FALSE)
+  round() |>
+  select(c("mean", "sd", "median", "min", "max")) |>
+  kable(caption = paste0("Anthropological values (n = ", nrow(antrop_data), ")"),
+        table.attr = 'data-quarto-disable-processing="true"') |>
+  kable_styling(bootstrap_options = c("striped"),
+                full_width = FALSE)
 ```
 
 # Pre-processing
@@ -65,13 +65,15 @@ Pre-processing was done using [npflow](https://nmrprocflow.org).
 ```{r}
 data_pre_post <- fread(input = "Data/data_Patho_pre_day.csv") |> 
   column_to_rownames(var = "Samplecode") |> 
+  mutate_at(c(2:237), \(x) ReplaceMissingByLoD(x)) |>
   mutate_at(c(2:237), \(x) scale(x)) |> 
   lapply(as.numeric) |> 
   as.data.frame()
 
 data_rand <- fread(input = "Data/data_Patho_rand.csv") |> 
   column_to_rownames(var = "Samplecode") |> 
-  mutate_at(c(2:380), \(x) scale(x)) |>
+  mutate_at(c(2:280), \(x) ReplaceMissingByLoD(x)) |>
+  mutate_at(c(2:280), \(x) scale(x)) |> 
   lapply(as.numeric) |> 
   as.data.frame()
 ```
@@ -83,14 +85,18 @@ We compare data from the first day with data from the day symptoms were observed
 ```{r KM_PP}
 km_res <- kmeans(x = data_pre_post, centers = 2)
 km_cluster <- km_res$cluster - 1
-confusionMatrix(km_cluster |> as.factor(), data_pre_post$Patho |> as.factor()) |> draw_confusion_matrix()
+confusionMatrix(as.factor(km_cluster), as.factor(data_pre_post$Patho)) |>
+  draw_confusion_matrix()
 fviz_cluster(object = km_res, data = data_pre_post)
 ```
 
 ```{r HC_PP}
 hc_res <- agnes(data_pre_post, method = "ward")
-confusionMatrix(hc_res |> cutree(k = 2) |> subtract(e1 = 1) |> as.factor(), data_pre_post$Patho |> as.factor()) |> draw_confusion_matrix()
 hclust_plot(clust_data = hc_res, target = data_pre_post$Patho)
+confusionMatrix(
+  hc_res |> cutree(k = 2) |> subtract(e1 = 1) |> as.factor(),
+  data_pre_post$Patho |> as.factor()
+) |> draw_confusion_matrix()
 ```
 
 ```{r PCA_PP}
@@ -101,8 +107,8 @@ autoplot(
   object = pca_res,
   data = data_pre_post,
   color = "Patho",
-  loadings = TRUE,
-  loadings.label = TRUE,
+  # loadings = TRUE,
+  # loadings.label = TRUE,
   loadings.label.size = 3,
   frame = TRUE,
   frame.type = 'norm'
@@ -110,8 +116,10 @@ autoplot(
 ```
 
 ```{r PLS-DA_PP}
-pls_res <- ropls::opls(data_pre_post, data_pre_post$Patho)
-# confusionMatrix(pls_res |> as.factor(), data_pre_post$Patho |> as.factor()) |> draw_confusion_matrix()
+pls_res <- caret::plsda(data_pre_post, as.factor(data_pre_post$Patho))
+ggplot(pls_res$model, aes(pls_res$scores[, 1], pls_res$scores[, 2])) +
+  geom_point()
+vip(pls_res, metric = "rmse")
 ```
 
 # Random comparison
