@@ -40,9 +40,10 @@ library(factoextra)
 library(cluster)
 library(ggfortify)
 library(magrittr)
+library(plotly)
 source("functions.R")
 ```
-
+    
 # Data description
 
 ```{r}
@@ -63,7 +64,14 @@ describe(x = antrop_data, na.rm = T) |>
 Pre-processing was done using [npflow](https://nmrprocflow.org).
 
 ```{r}
-data_pre_post <- fread(input = "Data/data_Patho_pre_day.csv") |> 
+data_pre_post <- fread(input = "Data/data_Patho_first_day.csv") |> 
+  column_to_rownames(var = "Samplecode") |> 
+  mutate_at(c(2:237), \(x) ReplaceMissingByLoD(x)) |>
+  mutate_at(c(2:237), \(x) scale(x)) |> 
+  lapply(as.numeric) |> 
+  as.data.frame()
+
+test_pre_post <- fread(input = "Data/test_set_first.csv") |> 
   column_to_rownames(var = "Samplecode") |> 
   mutate_at(c(2:237), \(x) ReplaceMissingByLoD(x)) |>
   mutate_at(c(2:237), \(x) scale(x)) |> 
@@ -72,89 +80,157 @@ data_pre_post <- fread(input = "Data/data_Patho_pre_day.csv") |>
 
 data_rand <- fread(input = "Data/data_Patho_rand.csv") |> 
   column_to_rownames(var = "Samplecode") |> 
-  mutate_at(c(2:280), \(x) ReplaceMissingByLoD(x)) |>
-  mutate_at(c(2:280), \(x) scale(x)) |> 
+  mutate_at(c(2:380), \(x) ReplaceMissingByLoD(x)) |>
+  mutate_at(c(2:380), \(x) scale(x)) |> 
+  lapply(as.numeric) |> 
+  as.data.frame()
+
+test_rand <- fread(input = "Data/test_set_rand.csv") |> 
+  column_to_rownames(var = "Samplecode") |> 
+  mutate_at(c(2:380), \(x) ReplaceMissingByLoD(x)) |>
+  mutate_at(c(2:380), \(x) scale(x)) |> 
   lapply(as.numeric) |> 
   as.data.frame()
 ```
 
-# Pre-post comparison
+# First vs. pathological comparison
 
 We compare data from the first day with data from the day symptoms were observed. Do not forget that the subjects are training in altitude and an effect of chronic hypoxic exposure can be observed.
 
+## k-means
+
 ```{r KM_PP}
-km_res <- kmeans(x = data_pre_post, centers = 2)
+km_res <- kmeans(x = data_pre_post,
+                 centers = 2L,
+                 nstart = 25L)
 km_cluster <- km_res$cluster - 1
+fviz_cluster(object = km_res,
+             data = data_pre_post,
+             geom = "none") +
+  geom_point(aes(shape = (as.character(
+    data_pre_post$Patho + 1
+  ))), size = 2) +
+  labs(shape = "Status")
 confusionMatrix(as.factor(km_cluster), as.factor(data_pre_post$Patho)) |>
   draw_confusion_matrix()
-fviz_cluster(object = km_res, data = data_pre_post)
 ```
+
+## Hierarchical clustering
 
 ```{r HC_PP}
 hc_res <- agnes(data_pre_post, method = "ward")
 hclust_plot(clust_data = hc_res, target = data_pre_post$Patho)
 confusionMatrix(
-  hc_res |> cutree(k = 2) |> subtract(e1 = 1) |> as.factor(),
+  hc_res |> cutree(k = 2L) |> subtract(e1 = 1) |> as.factor(),
   data_pre_post$Patho |> as.factor()
 ) |> draw_confusion_matrix()
 ```
 
+## PCA
+
 ```{r PCA_PP}
 pca_res <- prcomp(x = data_pre_post)
 pca_scores <- data.frame(pca_res$x[, 1:2])
-# confusionMatrix(pca_scores |> kmeans(centers = 2) %$% cluster - 1 |> as.factor(), data_pre_post$Patho |> as.factor()) |> draw_confusion_matrix()
-autoplot(
-  object = pca_res,
-  data = data_pre_post,
-  color = "Patho",
-  # loadings = TRUE,
-  # loadings.label = TRUE,
-  loadings.label.size = 3,
-  frame = TRUE,
-  frame.type = 'norm'
-)
+pca_plot <- autoplot(object = pca_res,
+         data = data_pre_post,
+         loadings.label.size = 3) +
+  geom_point(aes(color = (as.character(
+    data_pre_post$Patho + 1
+  ))), size = 2) +
+  stat_ellipse(aes(
+    group = as.character(data_pre_post$Patho + 1),
+    colour = as.character(data_pre_post$Patho + 1)
+  )) +
+  labs(color = "Patho")
+ggplotly()
 ```
 
+## PLS-DA
+
 ```{r PLS-DA_PP}
-pls_res <- caret::plsda(data_pre_post, as.factor(data_pre_post$Patho))
-ggplot(pls_res$model, aes(pls_res$scores[, 1], pls_res$scores[, 2])) +
-  geom_point()
+pls_res <- caret::plsda(data_pre_post, as.factor(data_pre_post$Patho), ncomp = 5)
+pls_plot <- ggplot(pls_res$model, aes(pls_res$scores[, 1], pls_res$scores[, 2])) +
+  geom_point(aes(color = (as.character(
+    data_pre_post$Patho + 1
+  ))), size = 2) +
+  stat_ellipse(aes(
+    group = as.character(data_pre_post$Patho + 1),
+    colour = as.character(data_pre_post$Patho + 1)
+  )) +
+  labs(color = "Patho")
+ggplotly()
 vip(pls_res, metric = "rmse")
+predict(pls_res, newdata = test_pre_post) |> as.factor() |>  confusionMatrix(test_pre_post$Patho |> as.factor()) |> draw_confusion_matrix()
+validationplot(pls_res, val.type = "RMSE")
+validationplot(pls_res, val.type = "R2")
+# mvrValstats(pls_res, "all")
 ```
 
 # Random comparison
 
 We compare data from pathological subjects with data from non pathological ones on the same day to avoid differences induced by the hypoxic exposure.
 
-```{r KM_R}
-km_res <- kmeans(x = data_rand, centers = 2)
+## k-means
+
+```{r KM_rand}
+km_res <- kmeans(x = data_rand,
+                 centers = 2L,
+                 nstart = 25L)
 km_cluster <- km_res$cluster - 1
-confusionMatrix(km_cluster |> as.factor(), data_rand$Patho |> as.factor()) |> draw_confusion_matrix()
-fviz_cluster(object = km_res, data = data_rand)
+fviz_cluster(object = km_res, data = data_rand, geom = "none") +
+  geom_point(aes(shape = (as.character(data_rand$Patho + 1))), size = 2) +
+  labs(shape = "Status")
+confusionMatrix(as.factor(km_cluster), as.factor(data_rand$Patho)) |>
+  draw_confusion_matrix()
 ```
 
-```{r HC_R}
+## Hierarchical clustering
+
+```{r HC_rand}
 hc_res <- agnes(data_rand, method = "ward")
-confusionMatrix(hc_res |> cutree(k = 2) |> subtract(e1 = 1) |> as.factor(), data_rand$Patho |> as.factor()) |> draw_confusion_matrix()
 hclust_plot(clust_data = hc_res, target = data_rand$Patho)
+confusionMatrix(
+  hc_res |> cutree(k = 2) |> subtract(e1 = 1) |> as.factor(),
+  data_rand$Patho |> as.factor()
+) |> draw_confusion_matrix()
 ```
 
-```{r PCA_R}
+## PCA
+
+```{r PCA_rand}
 pca_res <- prcomp(x = data_rand)
-# confusionMatrix(pca_res |> as.factor(), data_rand$Patho |> as.factor()) |> draw_confusion_matrix()
-autoplot(
-  object = pca_res,
-  data = data_rand,
-  color = "Patho",
-  loadings = TRUE,
-  loadings.label = TRUE,
-  loadings.label.size = 3
-)
+pca_scores <- data.frame(pca_res$x[, 1:2])
+pca_plot <- autoplot(object = pca_res,
+         data = data_rand,
+         loadings.label.size = 3) +
+  geom_point(aes(color = (as.character(
+    data_rand$Patho + 1
+  ))), size = 2) +
+  stat_ellipse(aes(
+    group = as.character(data_rand$Patho + 1),
+    colour = as.character(data_rand$Patho + 1)
+  )) +
+  labs(color = "Patho")
+ggplotly()
 ```
 
-```{r PLS-DA_R}
-pls_res <- ropls::opls(data_rand, data_rand$Patho)
-# confusionMatrix(pls_res |> as.factor(), data_rand$Patho |> as.factor()) |> draw_confusion_matrix()
+## PLS-DA
+
+```{r PLS-DA_rand}
+pls_res <- caret::plsda(data_rand, as.factor(data_rand$Patho), ncomp = 5)
+pls_plot <- ggplot(pls_res$model, aes(pls_res$scores[, 1], pls_res$scores[, 2])) +
+  geom_point(aes(color = (as.character(data_rand$Patho + 1))), size = 2) +
+  stat_ellipse(aes(
+    group = as.character(data_rand$Patho + 1),
+    colour = as.character(data_rand$Patho + 1)
+  )) +
+  labs(color = "Patho")
+ggplotly()
+vip(pls_res, metric = "rmse")
+predict(pls_res, newdata = test_rand) |> as.factor() |>  confusionMatrix(test_rand$Patho |> as.factor()) |> draw_confusion_matrix()
+validationplot(pls_res, val.type = "RMSE")
+validationplot(pls_res, val.type = "R2")
+# mvrValstats(pls_res, "all")
 ```
 
 # Full dataset detection
