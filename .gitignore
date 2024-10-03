@@ -37,3 +37,5 @@ rsconnect/
 *.html
 Data
 patho_pred_files
+
+/.quarto/

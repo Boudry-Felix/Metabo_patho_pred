@@ -1,0 +1,21 @@
+format:
+    html:
+      toc: true
+      toc_depth: 3
+      code-links:
+         - text: Github
+           href: https://github.com/fboudry/patho_pred.git
+           icon: github
+      other-links:
+        - text: Lab
+          href: https://espace-dev.fr
+        - text: email
+          href: mailto:felix.boudry@univ-perp.fr
+      code-fold: show
+      code-summary: "Show code"
+      code-tools:
+          source: true
+          toggle: true
+theme: 
+    light: flatly
+    dark: darkly
