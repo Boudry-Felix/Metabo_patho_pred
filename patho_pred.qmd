@@ -5,9 +5,12 @@ author: "Félix BOUDRY"
 
 ## Context
 
-We aim at detecting pathological athletes during an altitude training camp. To do so we used urine sample analysed by NMR. Here we try different model to detect the pathological samples to determine which one is the best.
+We aim at detecting pathological athletes during an altitude training camp. To do so we used urine sample analysed by NMR. Here we try different models to detect the pathological samples to determine which one is the best.
 
-```{r Config, include=FALSE}
+```{r}
+#| label: config
+#| include: false
+#| fig-align: center
 set.seed(42)
 library(tidyverse)
 library(data.table)
@@ -23,6 +26,7 @@ library(cluster)
 library(ggfortify)
 library(magrittr)
 library(plotly)
+library(ggpubr)
 source("functions.R")
 
 theme_set(new = theme_bw())
@@ -31,16 +35,21 @@ theme_set(new = theme_bw())
 # Data description
 
 ```{r}
+#| label: data-description
 antrop_data <- fread(input = "Data/Subjects.csv") |>
   clean_names() |>
   select(c("age", "height", "weight"))
 describe(x = antrop_data, na.rm = T) |>
   round(digits = 0) |>
   select(c("mean", "sd", "median", "min", "max")) |>
-  kable(caption = paste0("Anthropological values (n = ", nrow(x = antrop_data), ")"),
-        table.attr = 'data-quarto-disable-processing="true"') |>
-  kable_styling(bootstrap_options = c("striped"),
-                full_width = FALSE)
+  kable(
+    caption = paste0("Anthropological values (n = ", nrow(x = antrop_data), ")"),
+    table.attr = 'data-quarto-disable-processing="true"'
+  ) |>
+  kable_styling(
+    bootstrap_options = c("striped"),
+    full_width = FALSE
+  )
 ```
 
 # Pre-processing
@@ -48,14 +57,17 @@ describe(x = antrop_data, na.rm = T) |>
 Pre-processing was done using [npflow](https://nmrprocflow.org).
 
 ```{r}
+#| label: pre-processing
 data_pre_post <- fread(input = "Data/data_Patho_first_day.csv") |>
   column_to_rownames(var = "Samplecode") |>
   mutate_at(
     .vars = vars(-"Patho", -"Patho_num"),
-    .funs =  \(x) ReplaceMissingByLoD(int.mat = x)
+    .funs = \(x) ReplaceMissingByLoD(int.mat = x)
   ) |>
-  mutate_at(.vars = vars(-"Patho", -"Patho_num"),
-            .funs = \(x) scale(x = x)) |>
+  mutate_at(
+    .vars = vars(-"Patho", -"Patho_num"),
+    .funs = \(x) scale(x = x)
+  ) |>
   as.data.frame()
 
 test_pre_post <- fread(input = "Data/test_set_first.csv") |>
@@ -64,8 +76,10 @@ test_pre_post <- fread(input = "Data/test_set_first.csv") |>
     .vars = vars(-"Patho", -"Patho_num"),
     .funs = \(x) ReplaceMissingByLoD(int.mat = x)
   ) |>
-  mutate_at(.vars = vars(-"Patho", -"Patho_num"),
-            .funs = \(x) scale(x = x)) |>
+  mutate_at(
+    .vars = vars(-"Patho", -"Patho_num"),
+    .funs = \(x) scale(x = x)
+  ) |>
   as.data.frame()
 
 data_rand <- fread(input = "Data/data_Patho_rand.csv") |>
@@ -74,8 +88,10 @@ data_rand <- fread(input = "Data/data_Patho_rand.csv") |>
     .vars = vars(-"Patho", -"Patho_num"),
     .funs = \(x) ReplaceMissingByLoD(int.mat = x)
   ) |>
-  mutate_at(.vars = vars(-"Patho", -"Patho_num"),
-            .funs = \(x) scale(x = x)) |>
+  mutate_at(
+    .vars = vars(-"Patho", -"Patho_num"),
+    .funs = \(x) scale(x = x)
+  ) |>
   as.data.frame()
 
 test_rand <- fread(input = "Data/test_set_rand.csv") |>
@@ -84,8 +100,10 @@ test_rand <- fread(input = "Data/test_set_rand.csv") |>
     .vars = vars(-"Patho", -"Patho_num"),
     .funs = \(x) ReplaceMissingByLoD(int.mat = x)
   ) |>
-  mutate_at(.vars = vars(-"Patho", -"Patho_num"),
-            .funs = \(x) scale(x = x)) |>
+  mutate_at(
+    .vars = vars(-"Patho", -"Patho_num"),
+    .funs = \(x) scale(x = x)
+  ) |>
   as.data.frame()
 ```
 
@@ -95,7 +113,9 @@ We compare data from the first day with data from the day symptoms were observed
 
 ## k-means
 
-```{r KM_PP}
+```{r}
+#| label: km-pp
+#| fig-align: center
 km_res <- kmeans(
   x = select(.data = data_pre_post, -c("Patho", "Patho_num")),
   centers = 2L,
@@ -107,8 +127,10 @@ fviz_cluster(
   data = select(.data = data_pre_post, -c("Patho", "Patho_num")),
   geom = "none"
 ) +
-  geom_point(mapping = aes(shape = data_pre_post$Patho),
-             size = 2) +
+  geom_point(
+    mapping = aes(shape = data_pre_post$Patho),
+    size = 2
+  ) +
   labs(shape = "Status")
 confusionMatrix(data = as.factor(x = km_cluster), as.factor(x = data_pre_post$Patho_num)) |>
   draw_confusion_matrix()
@@ -116,7 +138,9 @@ confusionMatrix(data = as.factor(x = km_cluster), as.factor(x = data_pre_post$Pa
 
 ## Hierarchical clustering
 
-```{r HC_PP}
+```{r}
+#| label: hc-pp
+#| fig-align: center
 hc_res <- agnes(x = select(.data = data_pre_post, -c("Patho", "Patho_num")), method = "ward")
 hclust_plot(clust_data = hc_res, target = data_pre_post$Patho_num)
 confusionMatrix(
@@ -127,22 +151,28 @@ confusionMatrix(
 
 ## PCA
 
-```{r PCA_PP}
+```{r}
+#| label: pca-pp
+#| fig-align: center
 pca_res <- prcomp(x = select(.data = data_pre_post, -c("Patho", "Patho_num")))
 autoplot(
   object = pca_res,
   data = select(.data = data_pre_post, -c("Patho", "Patho_num")),
   loadings.label.size = 3
 ) +
-  geom_point(mapping = aes(color = data_pre_post$Patho),
-             size = 2) +
+  geom_point(
+    mapping = aes(color = data_pre_post$Patho),
+    size = 2
+  ) +
   stat_ellipse(mapping = aes(group = data_pre_post$Patho, colour = data_pre_post$Patho)) +
   labs(color = "Patho")
 ```
 
 ## PLS-DA
 
-```{r PLS-DA_PP}
+```{r}
+#| label: plsda-pp
+#| fig-align: center
 pls_res <- mixOmics::plsda(
   X = select(.data = data_pre_post, -c("Patho", "Patho_num")),
   Y = as.factor(x = data_pre_post$Patho),
@@ -154,8 +184,10 @@ ggplot(
   data = pls_res$input.X,
   mapping = aes(x = pls_res$variates$X[, 1], y = pls_res$variates$X[, 2])
 ) +
-  geom_point(mapping = aes(color = data_pre_post$Patho),
-             size = 2) +
+  geom_point(
+    mapping = aes(color = data_pre_post$Patho),
+    size = 2
+  ) +
   stat_ellipse(mapping = aes(group = data_pre_post$Patho, colour = data_pre_post$Patho)) +
   xlab(label = paste0("PC1 (", pc1_var |> round(digits = 1), "%)")) +
   ylab(label = paste0("PC2 (", pc2_var |> round(digits = 1), "%)")) +
@@ -171,15 +203,31 @@ my_vips <- vip(object = pls_res, metric = "rmse")
 plot(x = my_vips)
 plot_data <- data_pre_post |>
   select(c("Patho", my_vips$data$Variable)) |>
-  pivot_longer(cols = starts_with(match = "B"),
-               names_to = "Buckets",
-               values_to = "Value")
-ggplot(data = plot_data,
-       mapping = aes(x = Buckets, y = Value, fill = Patho)) +
+  pivot_longer(
+    cols = starts_with(match = "B"),
+    names_to = "Buckets",
+    values_to = "Value"
+  )
+buckets_stats <- lapply(
+  my_vips$data$Variable,
+  \(x) wilcox.test(data_pre_post[data_pre_post$Patho == "Pathological", x], data_pre_post[data_pre_post$Patho == "Healthy", x])$p.value
+) |>
+  `names<-`(my_vips$data$Variable) |>
+  lapply(p.adjust, method = "BH")
+ggplot(
+  data = plot_data,
+  mapping = aes(x = Buckets, y = Value, fill = Patho)
+) +
   geom_boxplot() +
+  stat_compare_means(mapping = aes(group = Patho), label = "p.signif") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-predict(object = pls_res,
-        newdata = select(.data = test_pre_post, -c("Patho", "Patho_num"))) |> as.factor() |>  confusionMatrix(data = test_pre_post$Patho |> as.factor()) |> draw_confusion_matrix()
+predict(
+  object = pls_res,
+  newdata = select(.data = test_pre_post, -c("Patho", "Patho_num"))
+) |>
+  as.factor() |>
+  confusionMatrix(data = test_pre_post$Patho |> as.factor()) |>
+  draw_confusion_matrix()
 validationplot(object = pls_res, val.type = "RMSE")
 validationplot(object = pls_res, val.type = "R2")
 ```
@@ -190,7 +238,9 @@ We compare data from pathological subjects with data from non pathological ones 
 
 ## k-means
 
-```{r KM_rand}
+```{r}
+#| label: km-rand
+#| fig-align: center
 km_res <- kmeans(
   x = select(.data = data_rand, -c("Patho", "Patho_num")),
   centers = 2L,
@@ -210,7 +260,9 @@ confusionMatrix(data = as.factor(x = km_cluster), as.factor(x = data_rand$Patho_
 
 ## Hierarchical clustering
 
-```{r HC_rand}
+```{r}
+#| label: hc-rand
+#| fig-align: center
 hc_res <- agnes(x = select(.data = data_rand, -c("Patho", "Patho_num")), method = "ward")
 hclust_plot(clust_data = hc_res, target = data_rand$Patho_num)
 confusionMatrix(
@@ -221,7 +273,9 @@ confusionMatrix(
 
 ## PCA
 
-```{r PCA_rand}
+```{r}
+#| label: pca-rand
+#| fig-align: center
 pca_res <- prcomp(x = select(.data = data_rand, -c("Patho", "Patho_num")))
 autoplot(
   object = pca_res,
@@ -235,7 +289,9 @@ autoplot(
 
 ## PLS-DA
 
-```{r PLS-DA_rand}
+```{r}
+#| label: plsda-rand
+#| fig-align: center
 pls_res <- mixOmics::plsda(
   X = select(.data = data_rand, -c("Patho", "Patho_num")),
   Y = as.factor(x = data_rand$Patho),
@@ -263,14 +319,28 @@ my_vips <- vip(object = pls_res, metric = "rmse")
 plot(x = my_vips)
 plot_data <- data_rand |>
   select(c("Patho", my_vips$data$Variable)) |>
-  pivot_longer(cols = starts_with(match = "B"),
-               names_to = "Buckets",
-               values_to = "Value")
-ggplot(data = plot_data,
-       mapping = aes(x = Buckets, y = Value, fill = Patho)) +
+  pivot_longer(
+    cols = starts_with(match = "B"),
+    names_to = "Buckets",
+    values_to = "Value"
+  )
+buckets_stats <- lapply(
+  my_vips$data$Variable,
+  \(x) wilcox.test(data_rand[data_rand$Patho == "Pathological", x], data_rand[data_rand$Patho == "Healthy", x])$p.value
+) |>
+  `names<-`(my_vips$data$Variable) |>
+  lapply(p.adjust, method = "BH")
+ggplot(
+  data = plot_data,
+  mapping = aes(x = Buckets, y = Value, fill = Patho)
+) +
   geom_boxplot() +
+  stat_compare_means(mapping = aes(group = Patho), label = "p.signif") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-predict(object = pls_res, newdata = select(.data = test_rand, -c("Patho", "Patho_num"))) |> as.factor() |>  confusionMatrix(data = test_rand$Patho |> as.factor()) |> draw_confusion_matrix()
+predict(object = pls_res, newdata = select(.data = test_rand, -c("Patho", "Patho_num"))) |>
+  as.factor() |>
+  confusionMatrix(data = test_rand$Patho |> as.factor()) |>
+  draw_confusion_matrix()
 validationplot(object = pls_res, val.type = "RMSE")
 validationplot(object = pls_res, val.type = "R2")
 ```

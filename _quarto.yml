@@ -17,5 +17,5 @@ format:
           source: true
           toggle: true
 theme: 
-    light: flatly
     dark: darkly
+    light: flatly
