@@ -58,9 +58,8 @@ Pre-processing was done using [npflow](https://nmrprocflow.org).
 
 ```{r}
 #| label: pre-processing
-categories <- c("patho", "first", "rand", "pre")
-data <- fread(input = "Data/data.csv") |>
-  column_to_rownames(var = "Samplecode") |>
+categories <- c("patho", "day", "Samplecode", "name", "surname", "discriminant", "date", "quatlity", "pathology_during")
+data <- fread(input = "Data/data_clean.csv") |>
   mutate_at(
     .vars = vars(-any_of(categories)),
     .funs = \(x) ReplaceMissingByLoD(int.mat = x)
@@ -74,24 +73,26 @@ data <- fread(input = "Data/data.csv") |>
     .funs = \(x) as.factor(x = x)
   ) |>
   as.data.frame()
+samples <- fread(input = "Data/samples_clean.csv")
 
-data_first <- filter(data, data$first == "1" | data$patho == "1")
-data_pre <- filter(data, data$pre == "1" | data$patho == "1")
-data_rand <- filter(data, data$rand == "1" | data$patho == "1")
-
-data_sub <- lst(data_first, data_pre, data_rand)
-
-test <- fread(input = "Data/test.csv") |>
+data <- merge(x = data, y = samples, by = "Samplecode") |>
   column_to_rownames(var = "Samplecode") |>
-  mutate_at(
-    .vars = vars(-any_of(categories)),
-    .funs = \(x) ReplaceMissingByLoD(int.mat = x)
-  ) |>
-  mutate_at(
-    .vars = vars(-any_of(categories)),
-    .funs = \(x) scale(x = x)
-  ) |>
-  as.data.frame()
+  replace_na(list(patho = 0))
+data$patho <- as.factor(data$patho)
+
+data_first_patho <- filter(.data = data, data$day == "1" | data$patho == "1")
+data_pre_patho <- filter(.data = data, lead(data$patho == "1") | data$patho == "1")
+data_last_patho <- filter(.data = data, day == max(day) | patho == "1")
+
+data_sub <- lst(data_first_patho, data_pre_patho, data_last_patho)
+
+test <- data |>
+  group_by(name, surname) %>%
+  arrange(day) %>%
+  mutate(next_after_patho = lag(patho, default = "0") == "1") %>%
+  filter(day == "3" | patho == "1" | next_after_patho) %>%
+  ungroup() %>%
+  select(-next_after_patho)
 ```
 
 # k-means
@@ -112,10 +113,18 @@ lapply(data_sub, \(x) {
     geom = "none"
   ) +
     geom_point(
-      mapping = aes(shape = x$patho |> as.factor()),
+      mapping = aes(shape = "patho" |> as.factor()),
       size = 2
     ) +
     labs(shape = "Status")
+})
+lapply(data_sub, \(x) {
+  km_res <- kmeans(
+    x = select(.data = x, -any_of(categories)),
+    centers = 2L,
+    nstart = 25L
+  )
+  km_cluster <- km_res$cluster - 1
   confusionMatrix(data = as.factor(x = km_cluster), as.factor(x = x$patho)) |>
     draw_confusion_matrix()
 })
@@ -203,6 +212,7 @@ lapply(data_sub, \(x) {
   validationplot(object = pls_res, val.type = "RMSE")
   validationplot(object = pls_res, val.type = "R2")
 })
+
 lapply(data_sub, \(x){
   pls_res <- caret::plsda(
     x = select(.data = x, -any_of(categories)),
@@ -233,7 +243,7 @@ lapply(data_sub, \(x){
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
 })
 # DiscriMiner and/or KODAMA
-# DisciMiner::plsDA(select(.data = data_rand, -any_of(categories)), as.factor(x = data_rand$Patho), cv = "LOO")
-# KODAMA::pls.double.cv(select(.data = data_pre_post, -any_of(categories)), as.factor(x = data_pre_post$Patho))
+# DisciMiner::plsDA(select(.data = data_rand_patho, -any_of(categories)), as.factor(x = data_rand_patho$Patho), cv = "LOO")
+# KODAMA::pls.double.cv(select(.data = data_pre_patho_post, -any_of(categories)), as.factor(x = data_pre_patho_post$Patho))
 ```
 
