@@ -76,6 +76,7 @@ data_first_patho <- data |>
   group_by(name, surname) |> 
   arrange(day) |> 
   filter(day == min(day) & pathology_during == "1" | patho == "1" & row_number() == min(which(patho == "1"))) |> 
+  suppressWarnings() |> 
   ungroup() |> 
   as.data.frame()
 
@@ -83,6 +84,7 @@ data_pre_patho <- data |>
   group_by(name, surname) |> 
   arrange(day) |> 
   filter(lead(patho == "1" & row_number() == min(which(patho == "1"))) | patho == "1" & row_number() == min(which(patho == "1"))) |> 
+  suppressWarnings() |> 
   ungroup() |> 
   as.data.frame()
 
@@ -90,6 +92,7 @@ data_last_patho <- data |>
   group_by(name, surname) |> 
   arrange(day) |> 
   filter(day == max(day) & pathology_during != "1" | patho == "1" & row_number() == min(which(patho == "1"))) |> 
+  suppressWarnings() |> 
   ungroup() |> 
   as.data.frame()
 
@@ -180,6 +183,9 @@ lapply(data_sub, \(x) {
     ) +
     stat_ellipse(mapping = aes(group = x$patho, color = x$patho)) +
     labs(color = "Patho")
+})
+lapply(data_sub, \(x) {
+  pca_res <- prcomp(x = select(.data = x, -any_of(categories)))
   fviz_pca_var(pca_res, select.var = list(contrib = 30), col.var = "contrib")
 })
 ```
@@ -260,9 +266,14 @@ lapply(data_sub, \(x){
     stat_compare_means(mapping = aes(group = patho), label = "p.signif") +
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
 })
-# DiscriMiner and/or KODAMA
-# DisciMiner::plsDA(select(.data = data_rand_patho, -any_of(categories)), as.factor(x = data_rand_patho$Patho), cv = "LOO")
-# KODAMA::pls.double.cv(select(.data = data_pre_patho_post, -any_of(categories)), as.factor(x = data_pre_patho_post$Patho))
+
+lapply(data_sub, \(x){
+  KODAMA::pls.double.cv(select(.data = x, -any_of(categories)), as.factor(x = x$patho))$results[[2]][c("R2Y", "Q2Y")]
+})
+
+lapply(data_sub, \(x){
+  DiscriMiner::plsDA(select(.data = x, -any_of(categories)), as.factor(x = x$patho), cv = "LOO")[c("R2", "Q2")]
+})
 ```
 
 ```{r}
