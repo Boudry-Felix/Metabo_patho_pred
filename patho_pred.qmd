@@ -35,49 +35,42 @@ theme_set(new = theme_bw()) # ggplot theme
 
 # Import and pre-processing
 
-Pre-processing was done using [npflow](https://nmrprocflow.org). This pre-processing is based on the [Rnmr1D](https://cran.r-project.org/web/packages/Rnmr1D/index.html) package and the macro file can be found in the npflow folder.
+Pre-processing was done using [npflow](https://nmrprocflow.org). This pre-processing is based on the [Rnmr1D](https://cran.r-project.org/web/packages/Rnmr1D/index.html) package.
 
 ```{r}
-#| label: pre-processing
+#| label: import & pre-processing
 antrop_data <- fread(input = "Data/subjects.csv") |>
   clean_names() |>
   select(c("age", "height", "weight"))
 categories <- c("patho", "day", "Samplecode", "name", "surname", "discriminant", "date", "quality", "pathology_during")
-# Load and preprocess data
 data <- fread("Data/data.csv") |>
   mutate(across(-any_of(categories), ~ ReplaceMissingByLoD(int.mat = .x))) |>
   mutate(across(-any_of(categories), ~ scale(.x))) |>
-  mutate(across(any_of(categories), as.factor)) |>
   merge(fread("Data/samples.csv"), by = "Samplecode") |>
-  replace_na(list(patho = 0)) |>
-  replace_na(list(pathology_during = 0)) |>
+  replace_na(list(patho = 0, pathology_during = 0)) |>
   column_to_rownames(var = "Samplecode") |>
   mutate(patho = as.factor(patho))
 
-# Define subsets with simplified filters
+# Define subsets datasets
+condition_patho <- quo(patho == "1" & row_number() == min(which(patho == "1")))
+condition_first <- quo(day == min(day) & pathology_during == "1")
+condition_pre <- quo(lead(patho == "1" & row_number() == min(which(patho == "1"))))
+condition_last <- quo(day == max(day) & pathology_during != "1")
+
 data_first_patho <- data |>
-  group_by(name, surname) |>
   arrange(day) |>
-  filter(day == min(day) & pathology_during == "1" | patho == "1" & row_number() == min(which(patho == "1"))) |>
-  suppressWarnings() |>
-  ungroup() |>
-  as.data.frame()
+  filter(!!condition_patho | !!condition_first, .by = c(name, surname)) |>
+  suppressWarnings()
 
 data_pre_patho <- data |>
-  group_by(name, surname) |>
   arrange(day) |>
-  filter(lead(patho == "1" & row_number() == min(which(patho == "1"))) | patho == "1" & row_number() == min(which(patho == "1"))) |>
-  suppressWarnings() |>
-  ungroup() |>
-  as.data.frame()
+  filter(!!condition_patho | !!condition_pre, .by = c(name, surname)) |>
+  suppressWarnings()
 
 data_last_patho <- data |>
-  group_by(name, surname) |>
   arrange(day) |>
-  filter(day == max(day) & pathology_during != "1" | patho == "1" & row_number() == min(which(patho == "1"))) |>
-  suppressWarnings() |>
-  ungroup() |>
-  as.data.frame()
+  filter(!!condition_patho | !!condition_last, .by = c(name, surname)) |>
+  suppressWarnings()
 
 # Combine subsets into a list
 data_sub <- list(
@@ -100,7 +93,7 @@ test <- data |>
 
 ```{r}
 #| label: data-description
-describe(x = antrop_data, na.rm = T) |>
+describe(x = antrop_data, na.rm = TRUE) |>
   round(digits = 0) |>
   select(c("mean", "sd", "median", "min", "max")) |>
   kable(
@@ -121,7 +114,7 @@ autoplot(
     mapping = aes(color = data$patho),
     size = 2
   ) +
-  geom_text(mapping = aes(label=rownames(data)), vjust = 0, hjust = 0) +
+  geom_text(mapping = aes(label = rownames(data)), vjust = 0, hjust = 0) +
   stat_ellipse(mapping = aes(group = data$patho, color = data$patho)) +
   labs(color = "Patho")
 ```
