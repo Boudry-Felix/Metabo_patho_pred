@@ -29,6 +29,8 @@ library(cvms)
 library(ggpubr)
 library(reshape2)
 library(KODAMA)
+library(ggimage)
+library(rsvg)
 source("functions.R")
 
 theme_set(new = theme_bw()) # ggplot theme
