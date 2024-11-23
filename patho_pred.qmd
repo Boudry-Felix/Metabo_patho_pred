@@ -25,9 +25,10 @@ library(factoextra)
 library(cluster)
 library(ggfortify)
 library(magrittr)
-library(plotly)
+library(cvms)
 library(ggpubr)
 library(reshape2)
+library(KODAMA)
 source("functions.R")
 
 theme_set(new = theme_bw()) # ggplot theme
@@ -79,7 +80,7 @@ data_sub <- list(
   data_last_patho = data_last_patho
 )
 
-# test set
+# Test set
 test <- data |>
   group_by(name, surname) |>
   arrange(day) |>
@@ -93,6 +94,7 @@ test <- data |>
 
 ```{r}
 #| label: data-description
+# Subject description
 describe(x = antrop_data, na.rm = TRUE) |>
   round(digits = 0) |>
   select(c("mean", "sd", "median", "min", "max")) |>
@@ -104,6 +106,7 @@ describe(x = antrop_data, na.rm = TRUE) |>
     bootstrap_options = c("striped"),
     full_width = FALSE
   )
+# PCA on full dataset
 pca_res <- prcomp(x = select(.data = data, -any_of(categories)))
 autoplot(
   object = pca_res,
@@ -117,6 +120,18 @@ autoplot(
   geom_text(mapping = aes(label = rownames(data)), vjust = 0, hjust = 0) +
   stat_ellipse(mapping = aes(group = data$patho, color = data$patho)) +
   labs(color = "Patho")
+
+# Buckets correlations
+corr_matrix <- cor(select(data, -any_of(categories)), method = "pearson") |>
+  as.matrix() |>
+  melt()
+ggplot(corr_matrix, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  scale_x_discrete(breaks = levels(corr_matrix$Var2)[c(T, rep(F, 14))]) +
+  scale_y_discrete(breaks = levels(corr_matrix$Var1)[c(T, rep(F, 14))]) +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  labs(title = "Spectral Data Correlation Heatmap", x = "Chemical Shift (buckets)", y = "Chemical Shift (buckets)")
 ```
 
 # k-means
@@ -125,6 +140,7 @@ autoplot(
 #| label: km-pp
 #| fig-align: center
 lapply(data_sub, \(x) {
+  # KM computation
   patho <- x$patho
   km_res <- kmeans(
     x = select(.data = x, -any_of(categories)),
@@ -132,7 +148,9 @@ lapply(data_sub, \(x) {
     nstart = 25L
   )
   km_cluster <- km_res$cluster - 1
-  fviz_cluster(
+  
+  # KM plot
+  km_fig <- fviz_cluster(
     object = km_res,
     data = select(.data = x, -any_of(categories)),
     geom = "none",
@@ -143,16 +161,13 @@ lapply(data_sub, \(x) {
       size = 2
     ) +
     labs(shape = "Status")
-})
-lapply(data_sub, \(x) {
-  km_res <- kmeans(
-    x = select(.data = x, -any_of(categories)),
-    centers = 2L,
-    nstart = 25L
-  )
+
+  # Confusion matrix
   km_cluster <- km_res$cluster - 1
-  confusionMatrix(data = as.factor(x = km_cluster), as.factor(x = x$patho)) |>
-    draw_confusion_matrix()
+  conf_mat_plot <- confusion_matrix(targets = x$patho, predictions = km_cluster) |>
+    plot_confusion_matrix()
+  conf_mat <- confusionMatrix(data = as.factor(x = km_cluster), as.factor(x = x$patho))
+  return(lst(km_fig, conf_mat_plot, conf_mat))
 })
 ```
 
@@ -162,12 +177,23 @@ lapply(data_sub, \(x) {
 #| label: hc-pp
 #| fig-align: center
 lapply(data_sub, \(x) {
+  # HC computation
   hc_res <- agnes(x = select(.data = x, -any_of(categories)), method = "ward")
-  hclust_plot(clust_data = hc_res, target = x$patho)
-  confusionMatrix(
+
+  # HC plot
+  hc_plot <- hclust_ggplot(clust_data = hc_res, dataset = x)
+
+  # Confusion matrix
+  conf_mat_plot <- confusion_matrix(
+    targets = x$patho,
+    predictions = hc_res |> cutree(k = 2L) |> subtract(e1 = 1)
+  ) |>
+    plot_confusion_matrix()
+  conf_mat <- confusionMatrix(
     data = hc_res |> cutree(k = 2L) |> subtract(e1 = 1) |> as.factor(),
     x$patho |> as.factor()
-  ) |> draw_confusion_matrix()
+  )
+  return(lst(hc_plot, conf_mat_plot, conf_mat))
 })
 ```
 
@@ -177,8 +203,11 @@ lapply(data_sub, \(x) {
 #| label: pca-pp
 #| fig-align: center
 lapply(data_sub, \(x) {
+  # PCA computation
   pca_res <- prcomp(x = select(.data = x, -any_of(categories)))
-  autoplot(
+
+  # PCA plot
+  pca_plot <- autoplot(
     object = pca_res,
     data = select(.data = x, -any_of(categories)),
     loadings.label.size = 3
@@ -189,10 +218,8 @@ lapply(data_sub, \(x) {
     ) +
     stat_ellipse(mapping = aes(group = x$patho, color = x$patho)) +
     labs(color = "Patho")
-})
-lapply(data_sub, \(x) {
-  pca_res <- prcomp(x = select(.data = x, -any_of(categories)))
-  fviz_pca_var(pca_res, select.var = list(contrib = 30), col.var = "contrib")
+  loadings_plot <- fviz_pca_var(pca_res, select.var = list(contrib = 30), col.var = "contrib")
+  return(lst(pca_plot, loadings_plot))
 })
 ```
 
@@ -201,56 +228,33 @@ lapply(data_sub, \(x) {
 ```{r}
 #| label: plsda-pp
 #| fig-align: center
-lapply(data_sub, \(x){
-  pls_res <- mixOmics::plsda(
-    X = select(.data = x, -any_of(categories)),
-    Y = as.factor(x = x$patho),
-    ncomp = 5
-  )
-  pc1_var <- pls_res$prop_expl_var$X[[1]] * 100
-  pc2_var <- pls_res$prop_expl_var$X[[2]] * 100
-  ggplot(
-    data = pls_res$input.X,
-    mapping = aes(x = pls_res$variates$X[, 1], y = pls_res$variates$X[, 2])
-  ) +
-    geom_point(
-      mapping = aes(color = x$patho),
-      size = 2
-    ) +
-    stat_ellipse(mapping = aes(group = x$patho, colour = x$patho)) +
-    xlab(label = paste0("Component 1 (", pc1_var |> round(digits = 1), "%)")) +
-    ylab(label = paste0("Component 2 (", pc2_var |> round(digits = 1), "%)")) +
-    labs(color = "patho")
-})
-
 lapply(data_sub, \(x) {
+  # PLSDA computation
   pls_res <- caret::plsda(
     x = select(.data = x, -any_of(categories)),
     as.factor(x = x$patho),
     ncomp = 5,
     validation = "CV"
   )
-  my_vips <- vip(object = pls_res, metric = "rmse")
-  plot(x = my_vips)
-  predict(
-    object = pls_res,
-    newdata = select(.data = test, -any_of(categories))
-  ) |>
-    as.factor() |>
-    confusionMatrix(data = test$patho |> as.factor()) |>
-    draw_confusion_matrix()
-  validationplot(object = pls_res, val.type = "RMSE")
-  validationplot(object = pls_res, val.type = "R2")
-})
 
-lapply(data_sub, \(x){
-  pls_res <- caret::plsda(
-    x = select(.data = x, -any_of(categories)),
-    as.factor(x = x$patho),
-    ncomp = 5,
-    validation = "CV"
-  )
+  # Prepare scores data frame
+  scores <- pls_res$scores[, c(1, 2)]
+  scores_df <- as.data.frame(scores) |>
+    mutate(Class = as.factor(x$patho)) # Add class labels for coloring
+
+  # PLSDA plot
+  pls_plot <- ggplot(scores_df, aes(x = `Comp 1`, y = `Comp 2`, color = Class)) +
+    geom_point(size = 3) +
+    stat_ellipse() +
+    labs(
+      title = "PLS-DA Score Plot",
+      x = "Component 1",
+      y = "Component 2"
+    )
+
+  # VIP
   my_vips <- vip(object = pls_res, metric = "rmse")
+  vip_plot <- autoplot(my_vips)
   plot_data <- x |>
     select(c("patho", my_vips$data$Variable)) |>
     pivot_longer(
@@ -264,32 +268,32 @@ lapply(data_sub, \(x){
   ) |>
     `names<-`(my_vips$data$Variable) |>
     lapply(p.adjust, method = "BH")
-  ggplot(
+  stat_plot <- ggplot(
     data = plot_data,
     mapping = aes(x = Buckets, y = Value, fill = patho)
   ) +
     geom_boxplot() +
     stat_compare_means(mapping = aes(group = patho), label = "p.signif") +
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
-})
 
-lapply(data_sub, \(x){
-  KODAMA::pls.double.cv(select(.data = x, -any_of(categories)), as.factor(x = x$patho), scaling = NULL, times = 10, runn = 10)[c("R2Y", "Q2Y")]
+  # Confusion matrix
+  conf_mat_plot <- predict(
+    object = pls_res,
+    newdata = select(.data = test, -any_of(categories))
+  ) |>
+    as.factor() |>
+    confusion_matrix(targets = test$patho |> as.factor()) |>
+    plot_confusion_matrix()
+  conf_mat <- predict(
+    object = pls_res,
+    newdata = select(.data = test, -any_of(categories))
+  ) |>
+    as.factor() |>
+    confusionMatrix(data = test$patho |> as.factor())
+
+  # Validation metrics
+  valid_metrics <- pls.double.cv(select(.data = x, -any_of(categories)), as.factor(x = x$patho), scaling = NULL, times = 10, runn = 10)[c("R2Y", "Q2Y")]
+  return(lst(pls_plot, vip_plot, stat_plot, conf_mat_plot, conf_mat, valid_metrics))
 })
 ```
 
-```{r}
-#| label: corr
-#| fig-align: center
-spectra <- fread("Data/data.csv") |> 
-  column_to_rownames("Samplecode")
-corr_matrix <- cor(spectra, method = "pearson")
-
-corr_long <- melt(as.matrix(corr_matrix))
-ggplot(corr_long, aes(Var1, Var2, fill = value)) +
-  geom_tile() +
-  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0) +
-  theme_minimal() +
-  labs(title = "Spectral Data Correlation Heatmap", x = "Chemical Shift (ppm)", y = "Chemical Shift (ppm)")
-
-```
