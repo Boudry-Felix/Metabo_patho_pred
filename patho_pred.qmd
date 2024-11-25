@@ -230,6 +230,7 @@ lapply(data_sub, \(x) {
 ```{r}
 #| label: plsda-pp
 #| fig-align: center
+cross_table <- data.frame()
 lapply(data_sub, \(x) {
   # PLSDA computation
   pls_res <- caret::plsda(
@@ -256,6 +257,17 @@ lapply(data_sub, \(x) {
 
   # VIP
   my_vips <- vip(object = pls_res, metric = "rmse")
+  vip_table <- my_vips$data$Variable |>
+    select(.data = x) |>
+    describeBy(group = x$patho) |>
+    lapply(\(x) select(x, c("mean", "sd", "median", "min", "max")))
+
+  vip_table <- (vip_table$`1` - vip_table$`0`) |> # Patho - non patho to give the evolution
+    mutate_if(is.factor, as.numeric) |> 
+    round(digits = 2)
+
+  cross_table <<- rbind(x = cross_table, y = vip_table, by = 0)
+
   vip_plot <- autoplot(my_vips)
   plot_data <- x |>
     select(c("patho", my_vips$data$Variable)) |>
@@ -295,7 +307,38 @@ lapply(data_sub, \(x) {
 
   # Validation metrics
   valid_metrics <- pls.double.cv(select(.data = x, -any_of(categories)), as.factor(x = x$patho), scaling = NULL, times = 10, runn = 10)[c("R2Y", "Q2Y")]
-  return(lst(pls_plot, vip_plot, stat_plot, conf_mat_plot, conf_mat, valid_metrics))
+  return(lst(pls_plot, vip_plot, vip_table, stat_plot, conf_mat_plot, conf_mat, valid_metrics))
 })
 ```
 
+# Bucket table
+
+```{r}
+#| label: bucket_table
+#| fig-align: center
+mutate(
+  .data = cross_table,
+  mean = ifelse(mean > 0,
+    paste0("<span style='color:green;'>&#9650; ", mean, "</span>"),
+    paste0("<span style='color:red;'>&#9660; ", mean, "</span>")
+  ),
+  sd = ifelse(sd > 0,
+    paste0("<span style='color:green;'>&#9650; ", sd, "</span>"),
+    paste0("<span style='color:red;'>&#9660; ", sd, "</span>")
+  ),
+  median = ifelse(median > 0,
+    paste0("<span style='color:green;'>&#9650; ", median, "</span>"),
+    paste0("<span style='color:red;'>&#9660; ", median, "</span>")
+  ),
+  min = ifelse(min > 0,
+    paste0("<span style='color:green;'>&#9650; ", min, "</span>"),
+    paste0("<span style='color:red;'>&#9660; ", min, "</span>")
+  ),
+  max = ifelse(max > 0,
+    paste0("<span style='color:green;'>&#9650; ", max, "</span>"),
+    paste0("<span style='color:red;'>&#9660; ", max, "</span>")
+  )
+) |>
+  kableExtra::kable(escape = FALSE, format = "html") |>
+  kableExtra::kable_styling(full_width = FALSE)
+```
