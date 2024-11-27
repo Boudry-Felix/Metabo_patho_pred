@@ -96,6 +96,7 @@ test <- data |>
 
 ```{r}
 #| label: data-description
+#| fig-align: center
 # Subject description
 describe(x = antrop_data, na.rm = TRUE) |>
   round(digits = 0) |>
@@ -108,7 +109,7 @@ describe(x = antrop_data, na.rm = TRUE) |>
     bootstrap_options = c("striped"),
     full_width = FALSE
   )
-# PCA on full dataset
+# PCA on full dataset by status and subject
 pca_res <- prcomp(x = select(.data = data, -any_of(categories)))
 autoplot(
   object = pca_res,
@@ -122,6 +123,18 @@ autoplot(
   geom_text(mapping = aes(label = rownames(data)), vjust = 0, hjust = 0) +
   stat_ellipse(mapping = aes(group = data$patho, color = data$patho)) +
   labs(color = "Patho")
+autoplot(
+  object = pca_res,
+  data = select(.data = data, -any_of(categories)),
+  loadings.label.size = 3
+) +
+  geom_point(
+    mapping = aes(color = rownames(data) |> str_extract("[:alpha:]+")),
+    size = 2
+  ) +
+  geom_text(mapping = aes(label = rownames(data)), vjust = 0, hjust = 0) +
+  stat_ellipse(mapping = aes(group = data$patho, color = data$patho)) +
+  labs(color = "Subject & patho status")
 
 # Buckets correlations
 corr_matrix <- cor(select(data, -any_of(categories)), method = "pearson") |>
