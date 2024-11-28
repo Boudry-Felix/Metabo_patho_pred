@@ -46,19 +46,18 @@ antrop_data <- fread(input = "Data/subjects.csv") |>
   clean_names() |>
   select(c("age", "height", "weight"))
 categories <- c("patho", "day", "Samplecode", "name", "surname", "discriminant", "date", "quality", "pathology_during")
-data <- fread("Data/data.csv") |>
-  mutate(across(-any_of(categories), ~ ReplaceMissingByLoD(int.mat = .x))) |>
-  mutate(across(-any_of(categories), ~ scale(.x))) |>
+data <- fread("Data/data.csv") |> 
+  mutate(across(-any_of(categories), ~ scale(.x))) |> # Normalise and scale data
   merge(fread("Data/samples.csv"), by = "Samplecode") |>
   replace_na(list(patho = 0, pathology_during = 0)) |>
   column_to_rownames(var = "Samplecode") |>
   mutate(patho = as.factor(patho))
 
 # Define subsets datasets
-condition_patho <- quo(patho == "1" & row_number() == min(which(patho == "1")))
-condition_first <- quo(day == min(day) & pathology_during == "1")
-condition_pre <- quo(lead(patho == "1" & row_number() == min(which(patho == "1"))))
-condition_last <- quo(day == max(day) & pathology_during != "1")
+condition_patho <- quo(patho == "1" & row_number() == min(which(patho == "1"))) # Sample on the first day of symptoms
+condition_first <- quo(day == min(day) & pathology_during == "1") # First sample of subject with later infection
+condition_pre <- quo(lead(patho == "1" & row_number() == min(which(patho == "1")))) # Sample on the day preceding symptoms
+condition_last <- quo(day == max(day) & pathology_during != "1") # Samples of the last camp day of healthy athletes
 
 data_first_patho <- data |>
   arrange(day) |>
@@ -109,7 +108,8 @@ describe(x = antrop_data, na.rm = TRUE) |>
     bootstrap_options = c("striped"),
     full_width = FALSE
   )
-# PCA on full dataset by status and subject
+
+# PCA on full dataset by status
 pca_res <- prcomp(x = select(.data = data, -any_of(categories)))
 autoplot(
   object = pca_res,
@@ -120,9 +120,10 @@ autoplot(
     mapping = aes(color = data$patho),
     size = 2
   ) +
-  geom_text(mapping = aes(label = rownames(data)), vjust = 0, hjust = 0) +
   stat_ellipse(mapping = aes(group = data$patho, color = data$patho)) +
   labs(color = "Patho")
+
+# PCA on full dataset by subject
 autoplot(
   object = pca_res,
   data = select(.data = data, -any_of(categories)),
@@ -330,26 +331,14 @@ lapply(data_sub, \(x) {
 #| label: bucket_table
 #| fig-align: center
 mutate(
-  .data = cross_table,
-  mean = ifelse(mean > 0,
-    paste0("<span style='color:green;'>&#9650; ", mean, "</span>"),
-    paste0("<span style='color:red;'>&#9660; ", mean, "</span>")
-  ),
-  sd = ifelse(sd > 0,
-    paste0("<span style='color:green;'>&#9650; ", sd, "</span>"),
-    paste0("<span style='color:red;'>&#9660; ", sd, "</span>")
-  ),
-  median = ifelse(median > 0,
-    paste0("<span style='color:green;'>&#9650; ", median, "</span>"),
-    paste0("<span style='color:red;'>&#9660; ", median, "</span>")
-  ),
-  min = ifelse(min > 0,
-    paste0("<span style='color:green;'>&#9650; ", min, "</span>"),
-    paste0("<span style='color:red;'>&#9660; ", min, "</span>")
-  ),
-  max = ifelse(max > 0,
-    paste0("<span style='color:green;'>&#9650; ", max, "</span>"),
-    paste0("<span style='color:red;'>&#9660; ", max, "</span>")
+  cross_table,
+  across(
+    everything(), # Apply to all columns
+    ~ ifelse(
+      . > 0,
+      paste0("<span style='color:green;'>&#9650; ", round(., 2), "</span>"),
+      paste0("<span style='color:red;'>&#9660; ", round(., 2), "</span>")
+    )
   )
 ) |>
   kableExtra::kable(escape = FALSE, format = "html") |>
