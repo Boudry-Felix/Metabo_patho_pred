@@ -46,7 +46,7 @@ hclust_ggplot <- function(clust_data, dataset) {
       panel.grid = ggplot2::element_blank(),
       panel.border = ggplot2::element_blank()
     ) +
-    labs(color = "Patho")
+    labs(color = "Condition")
 
   # Add colored bars
   # Order bar elements to match dendrogramm order (i.e, MC7 and JR10 are last.)

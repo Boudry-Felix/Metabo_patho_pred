@@ -45,8 +45,8 @@ Pre-processing was done using [npflow](https://nmrprocflow.org). This pre-proces
 antrop_data <- fread(input = "Data/subjects.csv") |>
   clean_names() |>
   select(c("age", "height", "weight"))
-categories <- c("patho", "day", "Samplecode", "name", "surname", "discriminant", "date", "quality", "pathology_during")
-data <- fread("Data/data.csv") |> 
+categories <- c("patho", "day", "Samplecode", "name", "surname", "discriminant", "date", "quality", "pathology_during", "filter_condition")
+data <- fread("Data/data.csv") |>
   mutate(across(-any_of(categories), ~ scale(.x))) |> # Normalise and scale data
   merge(fread("Data/samples.csv"), by = "Samplecode") |>
   replace_na(list(patho = 0, pathology_during = 0)) |>
@@ -54,31 +54,101 @@ data <- fread("Data/data.csv") |>
   mutate(patho = as.factor(patho))
 
 # Define subsets datasets
-condition_patho <- quo(patho == "1" & row_number() == min(which(patho == "1"))) # Sample on the first day of symptoms
-condition_first <- quo(day == min(day) & pathology_during == "1") # First sample of subject with later infection
-condition_pre <- quo(lead(patho == "1" & row_number() == min(which(patho == "1")))) # Sample on the day preceding symptoms
-condition_last <- quo(day == max(day) & pathology_during != "1") # Samples of the last camp day of healthy athletes
+cond_patho_day <- quo(patho == "1" & row_number() == min(which(patho == "1"))) # Sample on the first day of symptoms
+cond_first_patho <- quo(day == min(day) & pathology_during == "1") # First sample of subject with later infection
+cond_third_patho <- quo(day == "3" & pathology_during == "1") # Third sample of subject with later infection
+cond_pre_patho <- quo(lead(patho == "1" & row_number() == min(which(patho == "1")))) # Sample on the day preceding symptoms
+cond_last_healthy <- quo(day == max(day) & pathology_during != "1") # Samples of the last camp day of healthy athletes
+cond_first_healthy <- quo(day == min(day) & pathology_during == "0") # First sample of subject without later infection
+cond_third_healthy <- quo(day == "3" & pathology_during == "0") # Third sample of subject without later infection
+cond_mid_healthy <- quo(day == "8" & pathology_during == "0") # Mid camp sample of subject without later infection
 
 data_first_patho <- data |>
   arrange(day) |>
-  filter(!!condition_patho | !!condition_first, .by = c(name, surname)) |>
+  filter(!!cond_patho_day | !!cond_first_patho, .by = c(name, surname)) |>
+  mutate(filter_condition = factor(
+    ifelse(patho == "1", "First Patho Day", "First day"),
+    levels = c("First Patho Day", "First day")
+  )) |>
+  mutate(filter_condition = factor(
+    ifelse(patho == "1", "0", "1"),
+    levels = c("0", "1")
+  )) |>
+  suppressWarnings()
+
+data_third_patho <- data |>
+  arrange(day) |>
+  filter(!!cond_patho_day | !!cond_third_patho, .by = c(name, surname)) |>
+  mutate(filter_condition = factor(
+    ifelse(patho == "1", "First Patho Day", "Third day"),
+    levels = c("First Patho Day", "Third day")
+  )) |>
+  mutate(filter_condition = factor(
+    ifelse(patho == "1", "0", "1"),
+    levels = c("0", "1")
+  )) |>
   suppressWarnings()
 
 data_pre_patho <- data |>
   arrange(day) |>
-  filter(!!condition_patho | !!condition_pre, .by = c(name, surname)) |>
+  filter(!!cond_patho_day | !!cond_pre_patho, .by = c(name, surname)) |>
+  mutate(filter_condition = factor(
+    ifelse(patho == "1", "First Patho Day", "Pre Patho"),
+    levels = c("First Patho Day", "Pre Patho")
+  )) |>
+  mutate(filter_condition = factor(
+    ifelse(patho == "1", "0", "1"),
+    levels = c("0", "1")
+  )) |>
   suppressWarnings()
 
 data_last_patho <- data |>
   arrange(day) |>
-  filter(!!condition_patho | !!condition_last, .by = c(name, surname)) |>
+  filter(!!cond_patho_day | !!cond_last_healthy, .by = c(name, surname)) |>
+  mutate(filter_condition = factor(
+    ifelse(day == "12" | day == "11", "Last Healthy", "First Patho Day"),
+    levels = c("Last Healthy", "First Patho Day")
+  )) |>
+  mutate(filter_condition = factor(
+    ifelse(day == "12" | day == "11", "0", "1"),
+    levels = c("0", "1")
+  )) |>
+  suppressWarnings()
+
+data_first_third <- data |>
+  arrange(day) |>
+  filter(!!cond_first_healthy | !!cond_third_healthy, .by = c(name, surname)) |>
+  mutate(filter_condition = factor(
+    ifelse(day == "3", "Third Healthy", "First Healthy"),
+    levels = c("Third Healthy", "First Healthy")
+  )) |>
+  mutate(filter_condition = factor(
+    ifelse(day == "3", "0", "1"),
+    levels = c("0", "1")
+  )) |>
+  suppressWarnings()
+
+data_third_mid <- data |>
+  arrange(day) |>
+  filter(!!cond_third_healthy | !!cond_mid_healthy, .by = c(name, surname)) |>
+  mutate(filter_condition = factor(
+    ifelse(day == "3", "Third Healthy", "Mid Healthy"),
+    levels = c("Third Healthy", "Mid Healthy")
+  )) |>
+  mutate(filter_condition = factor(
+    ifelse(day == "3", "0", "1"),
+    levels = c("0", "1")
+  )) |>
   suppressWarnings()
 
 # Combine subsets into a list
 data_sub <- list(
   data_first_patho = data_first_patho,
+  data_third_patho = data_third_patho,
   data_pre_patho = data_pre_patho,
-  data_last_patho = data_last_patho
+  data_last_patho = data_last_patho,
+  data_first_third = data_first_third,
+  data_third_mid = data_third_mid
 )
 
 # Test set
@@ -157,7 +227,7 @@ ggplot(corr_matrix, aes(x = Var1, y = Var2, fill = value)) +
 #| fig-align: center
 lapply(data_sub, \(x) {
   # KM computation
-  patho <- x$patho
+  patho <- x$filter_condition
   km_res <- kmeans(
     x = select(.data = x, -any_of(categories)),
     centers = 2L,
@@ -176,13 +246,13 @@ lapply(data_sub, \(x) {
       mapping = aes(shape = patho),
       size = 2
     ) +
-    labs(shape = "Status")
+    labs(shape = "Condition")
 
   # Confusion matrix
   km_cluster <- km_res$cluster - 1
-  conf_mat_plot <- confusion_matrix(targets = x$patho, predictions = km_cluster) |>
+  conf_mat_plot <- confusion_matrix(targets = x$filter_condition, predictions = km_cluster) |>
     plot_confusion_matrix()
-  conf_mat <- confusionMatrix(data = as.factor(x = km_cluster), as.factor(x = x$patho))
+  conf_mat <- confusionMatrix(data = as.factor(x = km_cluster), as.factor(x = x$filter_condition))
   return(lst(km_fig, conf_mat_plot, conf_mat))
 })
 ```
@@ -201,13 +271,13 @@ lapply(data_sub, \(x) {
 
   # Confusion matrix
   conf_mat_plot <- confusion_matrix(
-    targets = x$patho,
+    targets = x$filter_condition,
     predictions = hc_res |> cutree(k = 2L) |> subtract(e1 = 1)
   ) |>
     plot_confusion_matrix()
   conf_mat <- confusionMatrix(
     data = hc_res |> cutree(k = 2L) |> subtract(e1 = 1) |> as.factor(),
-    x$patho |> as.factor()
+    x$filter_condition |> as.factor()
   )
   return(lst(hc_plot, conf_mat_plot, conf_mat))
 })
@@ -229,11 +299,12 @@ lapply(data_sub, \(x) {
     loadings.label.size = 3
   ) +
     geom_point(
-      mapping = aes(color = x$patho),
+      mapping = aes(color = x$filter_condition),
       size = 2
     ) +
-    stat_ellipse(mapping = aes(group = x$patho, color = x$patho)) +
-    labs(color = "Patho")
+    geom_text(mapping = aes(label = rownames(x)), vjust = 0, hjust = 0) +
+    stat_ellipse(mapping = aes(group = x$filter_condition, color = x$filter_condition)) +
+    labs(color = "Condition")
   loadings_plot <- fviz_pca_var(pca_res, select.var = list(contrib = 30), col.var = "contrib")
   return(lst(pca_plot, loadings_plot))
 })
@@ -249,7 +320,7 @@ lapply(data_sub, \(x) {
   # PLSDA computation
   pls_res <- caret::plsda(
     x = select(.data = x, -any_of(categories)),
-    as.factor(x = x$patho),
+    as.factor(x = x$filter_condition),
     ncomp = 5,
     validation = "CV"
   )
@@ -257,12 +328,13 @@ lapply(data_sub, \(x) {
   # Prepare scores data frame
   scores <- pls_res$scores[, c(1, 2)]
   scores_df <- as.data.frame(scores) |>
-    mutate(Class = as.factor(x$patho)) # Add class labels for coloring
+    mutate(Class = as.factor(x$filter_condition)) # Add class labels for coloring
 
   # PLSDA plot
   pls_plot <- ggplot(scores_df, aes(x = `Comp 1`, y = `Comp 2`, color = Class)) +
     geom_point(size = 3) +
     stat_ellipse() +
+    geom_text(mapping = aes(label = rownames(x)), vjust = 0, hjust = 0) +
     labs(
       title = "PLS-DA Score Plot",
       x = "Component 1",
@@ -273,7 +345,7 @@ lapply(data_sub, \(x) {
   my_vips <- vip(object = pls_res, metric = "rmse")
   vip_table <- my_vips$data$Variable |>
     select(.data = x) |>
-    describeBy(group = x$patho) |>
+    describeBy(group = x$filter_condition) |>
     lapply(\(x) select(x, c("mean", "sd", "median", "min", "max")))
 
   vip_table <- (vip_table$`1` - vip_table$`0`) |> # Patho - non patho to give the evolution
@@ -292,7 +364,7 @@ lapply(data_sub, \(x) {
     )
   buckets_stats <- lapply(
     my_vips$data$Variable,
-    \(z) wilcox.test(x[x$patho == "1", z], x[x$patho == "0", z])$p.value
+    \(z) wilcox.test(x[x$filter_condition == "1", z], x[x$filter_condition == "0", z])$p.value
   ) |>
     `names<-`(my_vips$data$Variable) |>
     lapply(p.adjust, method = "BH")
@@ -302,7 +374,8 @@ lapply(data_sub, \(x) {
   ) +
     geom_boxplot() +
     stat_compare_means(mapping = aes(group = patho), label = "p.signif") +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(fill = "Condition")
 
   # Confusion matrix
   conf_mat_plot <- predict(
@@ -320,7 +393,7 @@ lapply(data_sub, \(x) {
     confusionMatrix(data = test$patho |> as.factor())
 
   # Validation metrics
-  valid_metrics <- pls.double.cv(select(.data = x, -any_of(categories)), as.factor(x = x$patho), scaling = NULL, times = 10, runn = 10)[c("R2Y", "Q2Y")]
+  valid_metrics <- pls.double.cv(select(.data = x, -any_of(categories)), as.factor(x = x$filter_condition), scaling = NULL, times = 10, runn = 10)[c("R2Y", "Q2Y")]
   return(lst(pls_plot, vip_plot, vip_table, stat_plot, conf_mat_plot, conf_mat, valid_metrics))
 })
 ```
