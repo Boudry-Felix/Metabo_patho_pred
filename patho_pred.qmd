@@ -141,6 +141,19 @@ data_third_mid <- data |>
   )) |>
   suppressWarnings()
 
+data_patho_mid <- data |>
+  arrange(day) |>
+  filter(!!cond_patho_day | !!cond_mid_healthy, .by = c(name, surname)) |>
+  mutate(filter_condition = factor(
+    ifelse(day == "8", "Mid Healthy", "Patho"),
+    levels = c("Mid Healthy", "Patho")
+  )) |>
+  mutate(filter_condition = factor(
+    ifelse(day == "8", "0", "1"),
+    levels = c("0", "1")
+  )) |>
+  suppressWarnings()
+
 # Combine subsets into a list
 data_sub <- list(
   data_first_patho = data_first_patho,
@@ -148,7 +161,8 @@ data_sub <- list(
   data_pre_patho = data_pre_patho,
   data_last_patho = data_last_patho,
   data_first_third = data_first_third,
-  data_third_mid = data_third_mid
+  data_third_mid = data_third_mid,
+  data_patho_mid = data_patho_mid
 )
 
 # Test set
@@ -356,7 +370,7 @@ lapply(data_sub, \(x) {
 
   vip_plot <- autoplot(my_vips)
   plot_data <- x |>
-    select(c("patho", my_vips$data$Variable)) |>
+    select(c("filter_condition", my_vips$data$Variable)) |>
     pivot_longer(
       cols = starts_with(match = "B"),
       names_to = "Buckets",
@@ -370,10 +384,10 @@ lapply(data_sub, \(x) {
     lapply(p.adjust, method = "BH")
   stat_plot <- ggplot(
     data = plot_data,
-    mapping = aes(x = Buckets, y = Value, fill = patho)
+    mapping = aes(x = Buckets, y = Value, fill = filter_condition)
   ) +
     geom_boxplot() +
-    stat_compare_means(mapping = aes(group = patho), label = "p.signif") +
+    stat_compare_means(mapping = aes(group = filter_condition), label = "p.signif") +
     theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
     labs(fill = "Condition")
 
@@ -393,7 +407,7 @@ lapply(data_sub, \(x) {
     confusionMatrix(data = test$patho |> as.factor())
 
   # Validation metrics
-  valid_metrics <- pls.double.cv(select(.data = x, -any_of(categories)), as.factor(x = x$filter_condition), scaling = NULL, times = 10, runn = 10)[c("R2Y", "Q2Y")]
+  valid_metrics <- pls.double.cv(select(.data = x, -any_of(categories)), as.factor(x = x$filter_condition), times = 1, runn = 1)[c("R2Y", "Q2Y")]
   return(lst(pls_plot, vip_plot, vip_table, stat_plot, conf_mat_plot, conf_mat, valid_metrics))
 })
 ```
