@@ -366,7 +366,7 @@ lapply(data_sub, \(x) {
     mutate_if(is.factor, as.numeric) |> 
     round(digits = 2)
 
-  cross_table <<- rbind(x = cross_table, y = vip_table, by = 0)
+  cross_table <<- rbind(cross_table, vip_table)
 
   vip_plot <- autoplot(my_vips)
   plot_data <- x |>
@@ -407,7 +407,7 @@ lapply(data_sub, \(x) {
     confusionMatrix(data = test$patho |> as.factor())
 
   # Validation metrics
-  valid_metrics <- pls.double.cv(select(.data = x, -any_of(categories)), as.factor(x = x$filter_condition), times = 1, runn = 1)[c("R2Y", "Q2Y")]
+  valid_metrics <- pls.double.cv(select(.data = x, -any_of(categories)), as.factor(x = x$filter_condition), times = 1, runn = 10)[c("R2Y", "Q2Y")]
   return(lst(pls_plot, vip_plot, vip_table, stat_plot, conf_mat_plot, conf_mat, valid_metrics))
 })
 ```
