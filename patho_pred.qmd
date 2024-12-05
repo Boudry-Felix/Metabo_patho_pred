@@ -31,6 +31,7 @@ library(reshape2)
 library(KODAMA)
 library(ggimage)
 library(rsvg)
+library(ropls)
 source("functions.R")
 
 theme_set(new = theme_bw()) # ggplot theme
@@ -320,7 +321,8 @@ lapply(data_sub, \(x) {
     stat_ellipse(mapping = aes(group = x$filter_condition, color = x$filter_condition)) +
     labs(color = "Condition")
   loadings_plot <- fviz_pca_var(pca_res, select.var = list(contrib = 30), col.var = "contrib")
-  return(lst(pca_plot, loadings_plot))
+  ropls_PCA <- opls(select(.data = x, -any_of(categories)), fig.pdfC = "none", info.txtC = "none")
+  return(lst(pca_plot, loadings_plot, ropls_PCA))
 })
 ```
 
@@ -408,7 +410,8 @@ lapply(data_sub, \(x) {
 
   # Validation metrics
   valid_metrics <- pls.double.cv(select(.data = x, -any_of(categories)), as.factor(x = x$filter_condition), times = 1, runn = 10)[c("R2Y", "Q2Y")]
-  return(lst(pls_plot, vip_plot, vip_table, stat_plot, conf_mat_plot, conf_mat, valid_metrics))
+  ropls_PLSDA <- opls(select(.data = x, -any_of(categories)), y = x$filter_condition, fig.pdfC = "none", info.txtC = "none")
+  return(lst(pls_plot, vip_plot, vip_table, stat_plot, conf_mat_plot, conf_mat, valid_metrics, ropls_PLSDA))
 })
 ```
 
