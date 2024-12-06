@@ -233,10 +233,12 @@ ggplot(corr_matrix, aes(x = Var1, y = Var2, fill = value)) +
   labs(title = "Spectral Data Correlation Heatmap", x = "Chemical Shift (buckets)", y = "Chemical Shift (buckets)")
 ```
 
-# PCA
+# Personnal analysis
+
+## PCA
 
 ```{r}
-#| label: pca-pp
+#| label: PCA
 #| fig-align: center
 lapply(data_sub, \(x) {
   # PCA computation
@@ -256,15 +258,14 @@ lapply(data_sub, \(x) {
     stat_ellipse(mapping = aes(group = x$filter_condition, color = x$filter_condition)) +
     labs(color = "Condition")
   loadings_plot <- fviz_pca_var(pca_res, select.var = list(contrib = 30), col.var = "contrib")
-  ropls_PCA <- opls(select(.data = x, -any_of(categories)), fig.pdfC = "none", info.txtC = "none")
-  return(lst(pca_plot, loadings_plot, ropls_PCA))
+  return(lst(pca_plot, loadings_plot))
 })
 ```
 
-# PLS-DA
+## PLS-DA
 
 ```{r}
-#| label: plsda-pp
+#| label: PLS-DA
 #| fig-align: center
 cross_table <- data.frame()
 lapply(data_sub, \(x) {
@@ -345,15 +346,14 @@ lapply(data_sub, \(x) {
 
   # Validation metrics
   valid_metrics <- pls.double.cv(select(.data = x, -any_of(categories)), as.factor(x = x$filter_condition), times = 1, runn = 10)[c("R2Y", "Q2Y")]
-  ropls_PLSDA <- opls(select(.data = x, -any_of(categories)), y = x$filter_condition, fig.pdfC = "none", info.txtC = "none")
-  return(lst(pls_plot, vip_plot, vip_table, stat_plot, conf_mat_plot, conf_mat, valid_metrics, ropls_PLSDA))
+  return(lst(pls_plot, vip_plot, vip_table, stat_plot, conf_mat_plot, conf_mat, valid_metrics))
 })
 ```
 
-# Bucket table
+## VIP
 
 ```{r}
-#| label: bucket_table
+#| label: VIP
 #| fig-align: center
 mutate(
   cross_table,
@@ -368,4 +368,44 @@ mutate(
 ) |>
   kableExtra::kable(escape = FALSE, format = "html") |>
   kableExtra::kable_styling(full_width = FALSE)
+```
+
+# ROPLS analysis
+
+## Description
+
+```{r}
+tmp <- lapply(data_sub, ropls::view)
+```
+
+## PCA
+
+```{r}
+#| label: PCA ropls
+#| fig-align: center
+tmp <- lapply(data_sub, \(x) {
+  opls(select(.data = x, -any_of(categories)))
+})
+```
+
+## PLS-DA
+
+```{r}
+#| label: PLS-DA ropls
+#| fig-align: center
+tmp <- lapply(data_sub, \(x) {
+  opls(select(.data = x, -any_of(categories)), y = x$filter_condition)
+})
+```
+
+## VIP
+
+```{r}
+#| label: VIP ropls
+#| fig-align: center
+lapply(data_sub, \(x) {
+  bib <- opls(select(.data = x, -any_of(categories)), y = x$filter_condition)
+  bob <- getVipVn(bib)
+  return(bob)
+})
 ```
