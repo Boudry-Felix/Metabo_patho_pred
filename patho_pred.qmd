@@ -22,7 +22,6 @@ library(caret)
 library(pls)
 library(vip)
 library(factoextra)
-library(cluster)
 library(ggfortify)
 library(magrittr)
 library(cvms)
@@ -32,7 +31,6 @@ library(KODAMA)
 library(ggimage)
 library(rsvg)
 library(ropls)
-source("functions.R")
 
 theme_set(new = theme_bw()) # ggplot theme
 ```
@@ -233,69 +231,6 @@ ggplot(corr_matrix, aes(x = Var1, y = Var2, fill = value)) +
   scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0) +
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
   labs(title = "Spectral Data Correlation Heatmap", x = "Chemical Shift (buckets)", y = "Chemical Shift (buckets)")
-```
-
-# k-means
-
-```{r}
-#| label: km-pp
-#| fig-align: center
-lapply(data_sub, \(x) {
-  # KM computation
-  patho <- x$filter_condition
-  km_res <- kmeans(
-    x = select(.data = x, -any_of(categories)),
-    centers = 2L,
-    nstart = 25L
-  )
-  km_cluster <- km_res$cluster - 1
-  
-  # KM plot
-  km_fig <- fviz_cluster(
-    object = km_res,
-    data = select(.data = x, -any_of(categories)),
-    geom = "none",
-    shape = NULL
-  ) +
-    geom_point(
-      mapping = aes(shape = patho),
-      size = 2
-    ) +
-    labs(shape = "Condition")
-
-  # Confusion matrix
-  km_cluster <- km_res$cluster - 1
-  conf_mat_plot <- confusion_matrix(targets = x$filter_condition, predictions = km_cluster) |>
-    plot_confusion_matrix()
-  conf_mat <- confusionMatrix(data = as.factor(x = km_cluster), as.factor(x = x$filter_condition))
-  return(lst(km_fig, conf_mat_plot, conf_mat))
-})
-```
-
-# Hierarchical clustering
-
-```{r}
-#| label: hc-pp
-#| fig-align: center
-lapply(data_sub, \(x) {
-  # HC computation
-  hc_res <- agnes(x = select(.data = x, -any_of(categories)), method = "ward")
-
-  # HC plot
-  hc_plot <- hclust_ggplot(clust_data = hc_res, dataset = x)
-
-  # Confusion matrix
-  conf_mat_plot <- confusion_matrix(
-    targets = x$filter_condition,
-    predictions = hc_res |> cutree(k = 2L) |> subtract(e1 = 1)
-  ) |>
-    plot_confusion_matrix()
-  conf_mat <- confusionMatrix(
-    data = hc_res |> cutree(k = 2L) |> subtract(e1 = 1) |> as.factor(),
-    x$filter_condition |> as.factor()
-  )
-  return(lst(hc_plot, conf_mat_plot, conf_mat))
-})
 ```
 
 # PCA

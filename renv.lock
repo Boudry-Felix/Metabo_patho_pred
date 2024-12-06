@@ -1509,18 +1509,6 @@
       ],
       "Hash": "15e9634c0fcd294799e9b2e929ed1b86"
     },
-    "ggdendro": {
-      "Package": "ggdendro",
-      "Version": "0.2.0",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Requirements": [
-        "MASS",
-        "R",
-        "ggplot2"
-      ],
-      "Hash": "6c64efa73d60c45946a5e6e3f894fdcd"
-    },
     "ggfortify": {
       "Package": "ggfortify",
       "Version": "0.4.17",
