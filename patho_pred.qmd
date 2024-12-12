@@ -404,8 +404,9 @@ tmp <- lapply(data_sub, \(x) {
 #| label: VIP ropls
 #| fig-align: center
 lapply(data_sub, \(x) {
-  bib <- opls(select(.data = x, -any_of(categories)), y = x$filter_condition)
-  bob <- getVipVn(bib)
-  return(bob)
+  opls(select(.data = x, -any_of(categories)), y = x$filter_condition) |>
+    getVipVn() |>
+    sort(decreasing = TRUE) |>
+    head(n = 10)
 })
 ```
