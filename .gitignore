@@ -35,6 +35,8 @@ po/*~
 rsconnect/
 # Personnal add
 *.html
+*.pdf
+*.docx
 Data
 patho_pred_files
 
