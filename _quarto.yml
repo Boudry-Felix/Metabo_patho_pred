@@ -11,11 +11,13 @@ format:
           href: https://espace-dev.fr
         - text: email
           href: mailto:felix.boudry@univ-perp.fr
-      code-fold: show
+      code-fold: true
       code-summary: "Show code"
       code-tools:
           source: true
           toggle: true
+    pdf: 
+      echo: false
 theme: 
     dark: darkly
     light: flatly

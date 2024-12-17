@@ -27,7 +27,7 @@ theme_set(new = theme_bw()) # ggplot theme
 
 # Import and pre-processing
 
-Pre-processing was done using [npflow](https://nmrprocflow.org). This pre-processing is based on the [Rnmr1D](https://cran.r-project.org/web/packages/Rnmr1D/index.html) package.
+Pre-processing (baseline, alignement and bucketing) was done using [npflow](https://nmrprocflow.org). This pre-processing is based on the [Rnmr1D](https://cran.r-project.org/web/packages/Rnmr1D/index.html) package.
 
 ```{r}
 #| label: import & pre-processing
@@ -35,7 +35,7 @@ antrop_data <- fread(input = "Data/subjects.csv") |>
   clean_names() |>
   select(c("age", "height", "weight"))
 categories <- c("patho", "day", "Samplecode", "name", "surname", "discriminant", "date", "quality", "pathology_during", "filter_condition")
-data <- fread("Data/data_full.csv") |>
+data <- fread("Data/data.csv") |>
   mutate(across(-any_of(categories), ~ scale(.x))) |> # Normalise and scale data
   merge(fread("Data/samples.csv"), by = "Samplecode") |>
   replace_na(list(patho = 0, pathology_during = 0)) |>
@@ -107,10 +107,15 @@ test_df <- data |>
 
 # Data description
 
+Three datasets are used:
+
+- The first is used to compare athletes that have been ill during the camp between their first sample and the day they indicated symptoms.
+- The second dataset is used to compare athletes that have not been ill during the camp between their first and third sample.
+- The last dataset is based on the same athletes but used to compare their third samples to their eights ones (corresponding to the mean day of first symptoms of ill athletes).
+
 ```{r}
 #| label: data-description
 #| fig-align: center
-#| eval: !expr knitr::is_html_output()
 # Subject description
 describe(x = antrop_data, na.rm = TRUE) |>
   round(digits = 0) |>
@@ -118,10 +123,6 @@ describe(x = antrop_data, na.rm = TRUE) |>
   kable(
     caption = paste0("Anthropological values (n = ", nrow(x = antrop_data), ")"),
     table.attr = 'data-quarto-disable-processing="true"'
-  ) |>
-  kable_styling(
-    bootstrap_options = c("striped"),
-    full_width = FALSE
   )
 
 # PCA on full dataset by status
@@ -136,6 +137,7 @@ autoplot(
     size = 2
   ) +
   stat_ellipse(mapping = aes(group = data$patho, color = data$patho)) +
+  ggtitle("PCA of the full dataset") +
   labs(color = "Patho")
 
 # PCA on full dataset by subject
@@ -150,6 +152,7 @@ autoplot(
   ) +
   geom_text(mapping = aes(label = rownames(data)), vjust = 0, hjust = 0) +
   stat_ellipse(mapping = aes(group = data$patho, color = data$patho)) +
+  ggtitle("PCA of the full dataset with groups by athletes") +
   labs(color = "Subject & patho status")
 
 # Buckets correlations
@@ -165,6 +168,8 @@ ggplot(corr_matrix, aes(x = Var1, y = Var2, fill = value)) +
   labs(title = "Spectral Data Correlation Heatmap", x = "Chemical Shift (buckets)", y = "Chemical Shift (buckets)")
 ```
 
+{{< pagebreak >}}
+
 # PCA
 
 ```{r}
@@ -174,6 +179,8 @@ tmp <- lapply(data_sub, \(x) {
   opls(select(.data = x, -any_of(categories)))
 })
 ```
+
+{{< pagebreak >}}
 
 # PLS-DA
 
